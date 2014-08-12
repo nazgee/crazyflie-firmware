@@ -352,6 +352,8 @@ void pmTask(void *param)
 
   vTaskDelay(1000);
 
+  systemSetCanFly(true);
+
   while(1)
   {
     vTaskDelay(100);
