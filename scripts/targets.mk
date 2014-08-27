@@ -22,13 +22,19 @@ VTMPL_COMMAND_SILENT="  VTMPL $@"
 
 CC_COMMAND=$(CC) $(CFLAGS) -c $< -o $(BIN)/$@
 CC_COMMAND_SILENT="  CC    $@"
-.c.o: 
+%.o : %.c
 	@$(if $(QUIET), ,echo $(CC_COMMAND$(VERBOSE)) )
 	@$(CC_COMMAND)
 
-LD_COMMAND=$(LD) $(LDFLAGS) $(foreach o,$(OBJ),$(BIN)/$(o)) -lm -o $@
+CXX_COMMAND=$(CXX) $(CFLAGS) $(CXXFLAGS) -c $< -o $(BIN)/$@
+CXX_COMMAND_SILENT="  CXX    $@"
+%.o : %.cpp
+	@$(if $(QUIET), ,echo $(CXX_COMMAND$(VERBOSE)) )
+	@$(CXX_COMMAND)
+
+LD_COMMAND=$(LD) $(LDFLAGS) $(foreach o,$(ALL_OBJ),$(BIN)/$(o)) -lm -o $@
 LD_COMMAND_SILENT="  LD    $@"
-$(PROG).elf: $(OBJ)
+$(PROG).elf: $(OBJ) $(CXX_OBJ)
 	@$(if $(QUIET), ,echo $(LD_COMMAND$(VERBOSE)) )
 	@$(LD_COMMAND)
 
@@ -50,7 +56,7 @@ AS_COMMAND_SILENT="  AS    $@"
 	@$(if $(QUIET), ,echo $(AS_COMMAND$(VERBOSE)) )
 	@$(AS_COMMAND)
 
-CLEAN_O_COMMAND=rm -f $(foreach o,$(OBJ),$(BIN)/$(o))
+CLEAN_O_COMMAND=rm -f $(foreach o,$(ALL_OBJ),$(BIN)/$(o))
 CLEAN_O_COMMAND_SILENT="  CLEAN_O"
 clean_o: clean_version
 	@$(if $(QUIET), ,echo $(CLEAN_O_COMMAND$(VERBOSE)) )

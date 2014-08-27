@@ -7,8 +7,9 @@
 -include config.mk
 
 ######### JTAG and environment configuration ##########
-OPENOCD_INTERFACE ?= interface/jtagkey.cfg
-OPENOCD_TARGET    ?= target/stm32f1x.cfg
+OPENOCD_INTERFACE ?= interface/busblaster.cfg
+# OPENOCD_TARGET    ?= target/stm32f1x.cfg
+OPENOCD_TARGET    ?= target/crazy.cfg
 CROSS_COMPILE     ?= arm-none-eabi-
 PYTHON2           ?= python
 CLOAD             ?= 1
@@ -78,6 +79,10 @@ PROJ_OBJ += version.o
 
 OBJ = $(CRT0) $(FREERTOS_OBJ) $(PORT_OBJ) $(ST_OBJ) $(PROJ_OBJ)
 
+CXX_OBJ = matrix.o
+
+ALL_OBJ = $(OBJ) $(CXX_OBJ)
+
 ifdef P
   C_PROFILE = -D P_$(P)
 endif
@@ -85,7 +90,8 @@ endif
 ############### Compilation configuration ################
 AS = $(CROSS_COMPILE)as
 CC = $(CROSS_COMPILE)gcc
-LD = $(CROSS_COMPILE)gcc
+CXX = $(CROSS_COMPILE)g++
+LD = $(CROSS_COMPILE)g++
 SIZE = $(CROSS_COMPILE)size
 OBJCOPY = $(CROSS_COMPILE)objcopy
 
@@ -121,6 +127,8 @@ CFLAGS += $(PROCESSOR) $(INCLUDES) $(STFLAGS) -Wall -fno-strict-aliasing $(C_PRO
 CFLAGS += -MD -MP -MF $(BIN)/dep/$(@).d -MQ $(@)
 #Permits to remove un-used functions and global variables from output file
 CFLAGS += -ffunction-sections -fdata-sections
+
+CXXFLAGS += -fno-exceptions -fno-rtti
 
 ASFLAGS = $(PROCESSOR) $(INCLUDES)
 LDFLAGS = $(CFLAGS) -Wl,-Map=$(PROG).map,--cref,--gc-sections -nostdlib

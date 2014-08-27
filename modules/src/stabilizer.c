@@ -62,6 +62,8 @@
 static Axis3f gyro; // Gyro axis data in deg/s
 static Axis3f acc;  // Accelerometer axis data in mG
 static Axis3f mag;  // Magnetometer axis data in testla
+static Axis3f magraw;  // Magnetometer axis data in testla
+static float heading; // current heading in deg
 
 static float eulerRollActual;
 static float eulerPitchActual;
@@ -140,6 +142,100 @@ static void stabilizerTask(void* param);
 static float constrain(float value, const float minVal, const float maxVal);
 static float deadband(float value, const float threshold);
 
+#include "matrix.h"
+
+float magCalibrationMatrix[3][3] = {
+    {0.870134, 0.0104259, -0.0352403},
+    {0.0104259, 0.865624, 0.0293254},
+    {-0.0352403, 0.0293254, 0.985180}
+};
+
+float calibRdata[3][3];
+
+MatrixObj calibR = {
+		.cols = 3,
+		.rows = 3,
+		.data = calibRdata
+};
+
+//float magCalibrationMatrix[3][3] = {
+//    {0.840058, 0.0177608, 0.00784748},
+//    {0.0177608, 0.868569, -0.00463037},
+//    {0.00784748, -0.00463037, 0.999506}
+//};
+
+Axis3f magOffsetVector = {.x=0.279877, .y=0.183886, .z=0.116093};
+//Axis3f magOffsetVector = {.x=0.279877, .y=0.183886 -0.18, .z=0.116093 + 0.05};
+//float magOffsetVector[3] = {0.164399, 0.0451709, 0.213467};
+
+static void fixMag(Axis3f* in, Axis3f* out) {
+
+  MatrixObj calMat = {
+      .rows = 3,
+      .cols = 3,
+      .data = (float*)magCalibrationMatrix
+  };
+
+  MatrixObj magVec = {
+      .rows = 3,
+      .cols = 1,
+      .data = (float*)in
+  };
+
+  MatrixObj rawVec = {
+      .rows = 3,
+      .cols = 1,
+      .data = (float*)out
+  };
+
+  MatrixObj calibVec = {
+      .rows = 3,
+      .cols = 1,
+      .data = (float*)out
+  };
+
+//  magVec.data[0] -= magOffsetVector.x;
+//  magVec.data[1] -= magOffsetVector.y;
+//  magVec.data[2] -= magOffsetVector.z;
+
+//  matrixMultiply(&calMat, &magVec, &rawVec);
+
+//  rawVec.data[0] -= magOffsetVector.x;
+//  rawVec.data[1] -= magOffsetVector.y;
+//  rawVec.data[2] -= magOffsetVector.z;
+
+//  matrixMultiply(&calibR, &rawVec, &calibVec);
+
+  matrixMultiply(&calibR, &magVec, &calibVec);
+
+  out->x = calibVec.data[0];
+  out->y = calibVec.data[1];
+  out->z = calibVec.data[2];
+}
+
+static void headlockInit(uint32_t samples, uint32_t freq)
+{
+	Axis3f uncalibrated = {.x=0, .y=0, .z=0};
+	Axis3f calibrated = {.x=1, .y=0, .z=0};
+
+	uint32_t lastWakeTime, i;
+
+	lastWakeTime = xTaskGetTickCount ();
+	for (i = 0; i < samples; ++i) {
+		imu9Read(&gyro, &acc, &magraw);
+		uncalibrated.x += magraw.x;
+		uncalibrated.y += magraw.y;
+		uncalibrated.z += magraw.z;
+		vTaskDelayUntil(&lastWakeTime, F2T(freq));
+	}
+
+	uncalibrated.x /= samples;
+	uncalibrated.y /= samples;
+	uncalibrated.z /= samples;
+
+	calculateRotationMatrix(&calibrated, &uncalibrated, &calibR);
+}
+
 void stabilizerInit(void)
 {
   if(isInit)
@@ -182,6 +278,7 @@ static void stabilizerTask(void* param)
 
   //Wait for the system to be fully started to start stabilization loop
   systemWaitStart();
+  headlockInit(200, 100);
 
   lastWakeTime = xTaskGetTickCount ();
 
@@ -190,7 +287,11 @@ static void stabilizerTask(void* param)
     vTaskDelayUntil(&lastWakeTime, F2T(IMU_UPDATE_FREQ)); // 500Hz
 
     // Magnetometer not yet used more then for logging.
-    imu9Read(&gyro, &acc, &mag);
+    imu9Read(&gyro, &acc, &magraw);
+    fixMag(&magraw, &mag);
+    heading = atan2(mag.y, mag.x);
+
+    //mag = magcal;
 
     if (imu6IsCalibrated())
     {
@@ -439,6 +540,10 @@ LOG_GROUP_START(mag)
 LOG_ADD(LOG_FLOAT, x, &mag.x)
 LOG_ADD(LOG_FLOAT, y, &mag.y)
 LOG_ADD(LOG_FLOAT, z, &mag.z)
+LOG_ADD(LOG_FLOAT, raw_x, &magraw.x)
+LOG_ADD(LOG_FLOAT, raw_y, &magraw.y)
+LOG_ADD(LOG_FLOAT, raw_z, &magraw.z)
+LOG_ADD(LOG_FLOAT, heading, &heading)
 LOG_GROUP_STOP(mag)
 
 LOG_GROUP_START(motor)
